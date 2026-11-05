@@ -20,7 +20,7 @@ class MealPlanner:
         self.retailer = retailer
 
     def plan_meals(self, days: int, servings: int, meals: list[str] | None = None) -> MealPlan:
-        recipes = self.db.catalog.list_recipes(limit=500)
+        recipes = self.db.catalog.list_recipes()
         if not recipes and not meals:
             raise PlanningError("No recipes found. Add recipe notes to the vault and run `grocery recipes extract`.")
         start = date.today()

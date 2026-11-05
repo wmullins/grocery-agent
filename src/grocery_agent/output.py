@@ -2,35 +2,46 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from rich.box import SIMPLE_HEAVY
+from rich.align import Align
+from rich.box import HEAVY, ROUNDED, SIMPLE_HEAVY
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 
-console = Console(width=100)
+console = Console(width=110)
 
-INK = "#1a1a1a"
-PAPER = "#f5f5f0"
-ACCENT = "#0036ff"  # deep blue — single accent
-INK_MUTED = "#666666"
-LINE = "#d9d9d9"
-OK = "#0a7a0a"
-WARN = "#b5651d"
-ERROR = "#b00020"
+# Lichtenstein pop-art palette over Ives minimalism
+INK = "#0a0a0a"  # near-black
+PAPER = "#ffffff"  # pure white
+ACCENT = "#ff0033"  # Lichtenstein red
+ACCENT_DARK = "#cc0022"
+BLUE = "#0033ff"  # Lichtenstein blue
+BLUE_DARK = "#0022cc"
+YELLOW = "#ffcc00"  # Lichtenstein yellow
+YELLOW_DARK = "#ccaa00"
+MUTED = "#666666"
+LINE = "#e5e5e5"
 
 
 def header(title: str, subtitle: str | None = None) -> None:
     text = Text(title, style=f"bold {INK}")
     if subtitle:
-        text.append(f"  ·  {subtitle}", style=INK_MUTED)
+        text.append(f"  ·  {subtitle}", style=MUTED)
+    panel = Panel(
+        Align.left(text, pad=(0, 2)),
+        box=HEAVY,
+        border_style=ACCENT_DARK,
+        padding=(0, 1),
+    )
     console.print()
-    console.print(Panel(text, box=SIMPLE_HEAVY, border_style=LINE, padding=(0, 1)))
+    console.print(panel)
     console.print()
 
 
 def section(title: str) -> None:
-    console.print(Text(f"{title.upper()}", style=f"bold {INK_MUTED}"))
+    console.print(Text(f"{title.upper()}", style=f"bold {MUTED}"))
 
 
 def money(minor: int | None) -> str:
@@ -46,26 +57,42 @@ def price_table(
     show_total: bool = False,
     total_minor: int | None = None,
 ) -> None:
-    table = Table(title=title, box=SIMPLE_HEAVY, border_style=LINE, header_style=f"bold {INK}")
+    table = Table(
+        title=title,
+        box=SIMPLE_HEAVY,
+        border_style=LINE,
+        header_style=f"bold {INK}",
+        show_lines=False,
+    )
     table.add_column("Product", style=f"bold {INK}")
-    table.add_column("Price", justify="right", style=INK)
-    table.add_column("Unit", justify="right", style=INK_MUTED)
-    table.add_column("Stock", justify="center", style=INK_MUTED)
+    table.add_column("Price", justify="right", style=ACCENT)
+    table.add_column("Unit", justify="right", style=MUTED)
+    table.add_column("Stock", justify="center", style=INK)
     for name, price, unit, stock in rows:
-        stock_style = OK if stock == "ok" else (WARN if stock == "unknown" else ERROR)
+        stock_style = "#0033ff" if stock == "ok" else ACCENT
         table.add_row(name, price, unit, Text(stock, style=stock_style))
     if show_total and total_minor is not None:
-        table.add_row(Text("Total", style=f"bold {INK}"), Text(money(total_minor), style=f"bold {INK}"), "", "")
+        table.add_row(
+            Text("Total", style=f"bold {INK}"),
+            Text(money(total_minor), style=f"bold {ACCENT}"),
+            "",
+            "",
+        )
     console.print(table)
     console.print()
 
 
 def proposal_table(title: str, lines: list[dict], budget_minor: int | None = None) -> None:
-    table = Table(title=title, box=SIMPLE_HEAVY, border_style=LINE, header_style=f"bold {INK}")
-    table.add_column("#", justify="right", style=INK_MUTED)
+    table = Table(
+        title=title,
+        box=SIMPLE_HEAVY,
+        border_style=LINE,
+        header_style=f"bold {INK}",
+    )
+    table.add_column("#", justify="right", style=MUTED)
     table.add_column("Product", style=f"bold {INK}")
     table.add_column("Qty", justify="right", style=INK)
-    table.add_column("Unit", justify="right", style=INK_MUTED)
+    table.add_column("Unit", justify="right", style=MUTED)
     table.add_column("Line", justify="right", style=INK)
     for line in lines:
         table.add_row(
@@ -79,12 +106,15 @@ def proposal_table(title: str, lines: list[dict], budget_minor: int | None = Non
     if budget_minor is not None:
         total = sum(line.get("line_total_minor") or 0 for line in lines)
         remaining = budget_minor - total
-        style = OK if remaining >= 0 else ERROR
+        style = ACCENT if remaining >= 0 else BLUE
         console.print(
             Panel(
-                Text(
-                    f"Subtotal: {money(total)}   Budget: {money(budget_minor)}   Remaining: {money(remaining)}",
-                    style=f"bold {style}",
+                Align.left(
+                    Text(
+                        f"Subtotal: {money(total)}   Budget: {money(budget_minor)}   Remaining: {money(remaining)}",
+                        style=f"bold {style}",
+                    ),
+                    pad=(0, 1),
                 ),
                 box=SIMPLE_HEAVY,
                 border_style=LINE,
@@ -96,29 +126,44 @@ def proposal_table(title: str, lines: list[dict], budget_minor: int | None = Non
 
 def status_panel(items: list[tuple[str, str, str]]) -> None:
     table = Table(box=SIMPLE_HEAVY, border_style=LINE, show_header=False)
-    table.add_column("Item", style=INK_MUTED)
+    table.add_column("Item", style=MUTED)
     table.add_column("Status", justify="center")
     table.add_column("Detail", style=INK)
     for name, status, detail in items:
-        style = OK if status == "ok" else (WARN if status == "warn" else ERROR)
+        style = "#0033ff" if status == "ok" else ACCENT
         table.add_row(name, Text(status.upper(), style=style), detail)
-    console.print(Panel(table, title="Doctor", title_align="left", box=SIMPLE_HEAVY, border_style=LINE, padding=(0, 1)))
+    console.print(
+        Panel(
+            table,
+            title="Doctor",
+            title_align="left",
+            box=ROUNDED,
+            border_style=INK,
+            padding=(0, 1),
+        )
+    )
     console.print()
 
 
 def ok(message: str) -> None:
-    console.print(Text(f"✓ {message}", style=OK))
+    console.print(Text(f"✓ {message}", style="#0033ff"))
 
 
 def warn(message: str) -> None:
-    console.print(Text(f"⚠ {message}", style=WARN))
+    console.print(Text(f"⚠ {message}", style=ACCENT))
 
 
 def error(message: str) -> None:
-    console.print(Text(f"✗ {message}", style=ERROR))
+    console.print(Text(f"✗ {message}", style=ACCENT_DARK))
 
 
 @contextmanager
 def spinner(message: str):
-    with console.status(Text(f"▸ {message}", style=INK), spinner="dots"):
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        transient=True,
+    )
+    with progress:
+        progress.add_task(message)
         yield

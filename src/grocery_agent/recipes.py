@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from .db import Database
 from .llm import OllamaClient
 from .models import Ingredient, RecipeDraft
-from .obsidian import HEADING_RE, extract_tags
+from .obsidian import HEADING_RE, extract_tags, note_title, parse_frontmatter
 
 INGREDIENT_HEADING_RE = re.compile(r"\bingredients?\b", re.IGNORECASE)
 SERVINGS_RE = re.compile(r"\b(?:serves?|servings?)\s*[:\-]?\s*(\d+)", re.IGNORECASE)
@@ -239,21 +240,22 @@ def _note_tags(frontmatter_json: str, body: str) -> list[str]:
 
 
 def extract_recipes(
+    vault_root: Path,
     db: Database,
     *,
     llm: OllamaClient | None = None,
-    limit: int = 500,
     recipes_folder: str = RECIPES_FOLDER,
 ) -> dict[str, int]:
     stats = {"notes": 0, "recipes": 0, "skipped": 0, "llm": 0}
-    for row in db.notes.list_notes(limit=limit):
-        path = str(row["path"])
-        if not path.startswith(recipes_folder):
-            continue
+    recipes_dir = vault_root / recipes_folder
+    if not recipes_dir.is_dir():
+        return stats
+    for path in sorted(recipes_dir.rglob("*.md")):
         stats["notes"] += 1
-        body = str(row["body"])
-        title = str(row["title"])
-        tags = _note_tags(str(row["frontmatter_json"]), body)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        frontmatter, body = parse_frontmatter(text)
+        title = note_title(frontmatter, body, path)
+        tags = extract_tags(frontmatter, body)
         if not is_recipe_like(title, body, tags):
             stats["skipped"] += 1
             continue
@@ -267,7 +269,7 @@ def extract_recipes(
             stats["skipped"] += 1
             continue
         for draft in drafts:
-            draft.source["note_path"] = str(row["path"])
+            draft.source["note_path"] = str(path.relative_to(vault_root))
             ingredients = []
             for ingredient in draft.ingredients:
                 ingredients.append(
@@ -281,7 +283,7 @@ def extract_recipes(
                     }
                 )
             db.catalog.replace_recipe(
-                note_id=int(row["id"]),
+                note_id=None,
                 title=draft.title,
                 servings=draft.servings,
                 prep_minutes=draft.prep_minutes,

@@ -99,7 +99,11 @@ def init(
     vault_indexer.ensure_agent_folder()
     with spinner("Indexing vault and extracting recipes"):
         sync_stats = vault_indexer.sync(db)
-        recipe_stats = extract_recipes(db, llm=OllamaClient(config.llm))
+        recipe_stats = extract_recipes(
+            vault_root=config.paths.vault,
+            db=db,
+            llm=OllamaClient(config.llm),
+        )
     header("Initialized", str(home))
     ok(f"Vault notes indexed: {sync_stats['indexed']} new, {sync_stats['unchanged']} unchanged")
     ok(f"Recipes extracted: {recipe_stats['recipes']}")
@@ -172,17 +176,19 @@ def notes_search(
 
 
 @app.command()
-def recipes_extract(
-    limit: int = typer.Option(500, "--limit"),
-) -> None:
+def recipes_extract() -> None:
     config = _load_config()
     db = _db()
     db.initialize()
-    with spinner("Syncing vault and extracting recipes"):
-        Vault(config.paths.vault, config.paths.output_folder).sync(db)
-        stats = extract_recipes(db, llm=OllamaClient(config.llm), limit=limit)
+    cleared = db.catalog.clear_recipes()
+    with spinner("Extracting recipes from vault"):
+        stats = extract_recipes(
+            vault_root=config.paths.vault,
+            db=db,
+            llm=OllamaClient(config.llm),
+        )
     header("Recipe Extraction")
-    ok(f"{stats['recipes']} recipes extracted from {stats['notes']} notes")
+    ok(f"{stats['recipes']} recipes from {stats['notes']} notes (cleared {cleared} old)")
 
 
 @app.command()

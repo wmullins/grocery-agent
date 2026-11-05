@@ -36,3 +36,9 @@
 - Storing retailer credentials or session cookies in agent data dir
 - Multi-agent swarm — single LangGraph graph with deterministic nodes
 - Writing checkout/payment code of any kind
+
+## Visual design
+- CLI: Ives minimalism (heavy borders, whitespace, clean typography) + Lichtenstein accents (red `#ff0033`, blue `#0033ff`, yellow `#ffcc00`, heavy borders)
+- Dashboard: Apple-style minimal surface cards + Lichtenstein bold accent colors for prices/status
+- No comments in source code (documentation in key_decisions.md instead)
+
