@@ -4,24 +4,34 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .db import Database
 
-app = FastAPI(title="Grocery Agent")
+templates_dir = Path(__file__).parent / "templates"
+env = Environment(
+    loader=FileSystemLoader(str(templates_dir)),
+    autoescape=select_autoescape(["html", "xml"]),
+    enable_async=False,
+)
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+app = FastAPI(title="Grocery Agent")
 
 
 def _db() -> Database:
     return Database(Path.home() / "Library" / "Application Support" / "grocery-agent" / "grocery.sqlite3")
 
 
+def _render(template_name: str, request: Request, **context: object) -> HTMLResponse:
+    template = env.get_template(template_name)
+    html = template.render(request=request, **context)
+    return HTMLResponse(html)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     db = _db()
     db.initialize()
-    # Query recent orders directly
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT retailer, status, total_minor, ordered_at FROM orders ORDER BY imported_at DESC LIMIT 8"
@@ -32,7 +42,6 @@ async def home(request: Request):
         price_count = conn.execute("SELECT COUNT(*) AS c FROM price_observations").fetchone()["c"]
         retailer_count = conn.execute("SELECT COUNT(DISTINCT retailer) AS c FROM retailer_products").fetchone()["c"]
 
-    # Biggest discounts: observations with promotion before > after
     with db.connect() as conn:
         rows = conn.execute(
             """
@@ -73,18 +82,16 @@ async def home(request: Request):
             for r in rows
         ]
 
-    return templates.TemplateResponse(
+    return _render(
         "home.html",
-        {
-            "request": request,
-            "orders_count": order_count,
-            "recipes_count": recipe_count,
-            "price_observations_count": price_count,
-            "retailers_count": retailer_count,
-            "recent_orders": recent_orders,
-            "big_discounts": big_discounts,
-            "common_recipes": common_recipes,
-        },
+        request,
+        orders_count=order_count,
+        recipes_count=recipe_count,
+        price_observations_count=price_count,
+        retailers_count=retailer_count,
+        recent_orders=recent_orders,
+        big_discounts=big_discounts,
+        common_recipes=common_recipes,
     )
 
 
@@ -97,7 +104,7 @@ async def orders_page(request: Request):
             "SELECT retailer, status, total_minor, ordered_at FROM orders ORDER BY imported_at DESC LIMIT 50"
         ).fetchall()
         orders = [dict(r) for r in rows]
-    return templates.TemplateResponse("orders.html", {"request": request, "orders": orders})
+    return _render("orders.html", request, orders=orders)
 
 
 @app.get("/recipes", response_class=HTMLResponse)
@@ -110,7 +117,7 @@ async def recipes_page(request: Request):
             "confidence, source_json FROM recipes ORDER BY title LIMIT 100"
         ).fetchall()
         recipes = [dict(r) for r in rows]
-    return templates.TemplateResponse("recipes.html", {"request": request, "recipes": recipes})
+    return _render("recipes.html", request, recipes=recipes)
 
 
 @app.get("/prices", response_class=HTMLResponse)
@@ -129,10 +136,10 @@ async def prices_page(request: Request):
             """
         ).fetchall()
         prices = [dict(r) for r in rows]
-    return templates.TemplateResponse("prices.html", {"request": request, "prices": prices})
+    return _render("prices.html", request, prices=prices)
 
 
 def main():
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8787)
+    uvicorn.run(app, host="127.0.0.1", port=8789)
