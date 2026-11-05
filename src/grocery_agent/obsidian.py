@@ -151,8 +151,21 @@ class Vault:
                 continue
             if any(relative == prefix or relative.startswith(prefix + "/") for prefix in self.excludes):
                 continue
-            if path == output or output in path.parents:
+            if path == output:
                 continue
+            if output in path.parents:
+                # Skip agent-owned notes under the output folder; index user
+                # notes (e.g. Recipes/) that live there.
+                try:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                if text.startswith("---\n"):
+                    end = text.find("\n---\n", 4)
+                    if end != -1 and AGENT_MARKER in text[4:end]:
+                        continue
+                if AGENT_MARKER in text.split("\n---\n", 1)[0] if text.startswith("---\n") else False:
+                    continue
             if path.is_file():
                 paths.append(path)
         return sorted(paths)

@@ -20,6 +20,9 @@ QUANTITY_RE = re.compile(
     r"each|whole)?\b\s*(?P<name>.+)$",
     re.IGNORECASE,
 )
+SECTION_HEADER_RE = re.compile(r"^[A-Z][a-zA-Z\s&]+:\s*$")
+PAREN_NOTE_RE = re.compile(r"\s*\(([^)]*)\)\s*$")
+BULLET_MARKER_RE = re.compile(r"^[\s]*[-•*+]|\d+\.\s")
 UNIT_MAP = {
     "teaspoon": "tsp",
     "teaspoons": "tsp",
@@ -67,6 +70,8 @@ DESCRIPTORS = {
     "plus",
     "extra",
 }
+
+RECIPES_FOLDER = "10 Projects/Grocery Agent/Recipes"
 
 
 def normalize_ingredient_name(name: str) -> str:
@@ -123,6 +128,71 @@ def _ingredient_section(body: str) -> str:
     return ""
 
 
+def _extract_recipe_from_line(line: str, default_tags: list[str] | None = None) -> RecipeDraft | None:
+    """Parse a single list-item line into a RecipeDraft.
+
+    Handles parenthetical ingredient notes:
+    'Salmon tacos (paprika, smashed salmon)' -> name='Salmon tacos', note='paprika, smashed salmon'
+    """
+    match = PAREN_NOTE_RE.search(line)
+    note = None
+    if match:
+        note = match.group(1).strip()
+        line = line[: match.start()].strip()
+    if not line or len(line) > 120:
+        return None
+    return RecipeDraft(
+        title=line,
+        ingredients=[Ingredient(name=line, optional=False, note=note)],
+        tags=list(default_tags or []),
+        confidence=0.6,
+        source={"extractor": "deterministic_list"},
+    )
+
+
+def extract_recipes_from_note(title: str, body: str, tags: list[str]) -> list[RecipeDraft]:
+    """Extract one or more recipes from a note.
+
+    Two formats supported:
+    1. Notes with an '## Ingredients' section -> one RecipeDraft with all ingredients
+    2. Notes that are just a list of dish names -> one RecipeDraft per line item
+    """
+    section = _ingredient_section(body)
+    if section:
+        ingredients: list[Ingredient] = []
+        for line in section.splitlines():
+            parsed = parse_ingredient_line(line)
+            if parsed is not None:
+                ingredients.append(parsed)
+        if not ingredients:
+            return []
+        return [
+            RecipeDraft(
+                title=title,
+                servings=None,
+                prep_minutes=None,
+                cook_minutes=None,
+                ingredients=ingredients,
+                tags=list(tags),
+                confidence=0.75,
+                source={"extractor": "deterministic_section"},
+            )
+        ]
+
+    # List format: each non-empty, non-section-header line is a recipe
+    drafts: list[RecipeDraft] = []
+    for line in body.splitlines():
+        cleaned = line.strip()
+        if not cleaned:
+            continue
+        if SECTION_HEADER_RE.match(cleaned):
+            continue
+        draft = _extract_recipe_from_line(cleaned, default_tags=tags)
+        if draft is not None:
+            drafts.append(draft)
+    return drafts
+
+
 def _first_int(pattern: re.Pattern[str], text: str) -> int | None:
     match = pattern.search(text)
     if not match:
@@ -133,36 +203,29 @@ def _first_int(pattern: re.Pattern[str], text: str) -> int | None:
         return None
 
 
-def extract_recipe_deterministic(title: str, body: str) -> RecipeDraft | None:
-    section = _ingredient_section(body)
-    if not section:
-        return None
-    ingredients: list[Ingredient] = []
-    for line in section.splitlines():
-        parsed = parse_ingredient_line(line)
-        if parsed is not None:
-            ingredients.append(parsed)
-    if not ingredients:
-        return None
-    return RecipeDraft(
-        title=title,
-        servings=_first_int(SERVINGS_RE, body),
-        prep_minutes=_first_int(PREP_RE, body),
-        cook_minutes=_first_int(COOK_RE, body),
-        ingredients=ingredients,
-        tags=extract_tags({}, body),
-        confidence=0.75,
-        source={"extractor": "deterministic"},
-    )
-
-
 def is_recipe_like(title: str, body: str, tags: list[str]) -> bool:
     tag_text = " ".join(tags).lower()
     if any(word in tag_text for word in ("recipe", "food", "meal", "cook")):
         return True
     if _ingredient_section(body):
         return True
-    return bool(re.search(r"\b(recipe|dinner|lunch|breakfast|meal)\b", title, re.IGNORECASE))
+    if bool(re.search(r"\b(recipe|dinner|lunch|breakfast|meal)\b", title, re.IGNORECASE)):
+        return True
+    # List format: multiple short dish-name lines
+    non_empty = [line.strip() for line in body.splitlines() if line.strip()]
+    if len(non_empty) >= 2:
+        dish_lines = [
+            line
+            for line in non_empty
+            if not SECTION_HEADER_RE.match(line) and not BULLET_MARKER_RE.match(line) and len(line) < 80
+        ]
+        if len(dish_lines) >= 2:
+            return True
+    # Single dish with parenthetical ingredient notes
+    if PAREN_NOTE_RE.search(body):
+        return True
+    # Ingredient quantity patterns
+    return bool(QUANTITY_RE.search(body))
 
 
 def _note_tags(frontmatter_json: str, body: str) -> list[str]:
@@ -180,9 +243,13 @@ def extract_recipes(
     *,
     llm: OllamaClient | None = None,
     limit: int = 500,
+    recipes_folder: str = RECIPES_FOLDER,
 ) -> dict[str, int]:
     stats = {"notes": 0, "recipes": 0, "skipped": 0, "llm": 0}
     for row in db.notes.list_notes(limit=limit):
+        path = str(row["path"])
+        if not path.startswith(recipes_folder):
+            continue
         stats["notes"] += 1
         body = str(row["body"])
         title = str(row["title"])
@@ -190,39 +257,41 @@ def extract_recipes(
         if not is_recipe_like(title, body, tags):
             stats["skipped"] += 1
             continue
-        draft = extract_recipe_deterministic(title, body)
-        if draft is None and llm is not None:
+        drafts = extract_recipes_from_note(title, body, tags)
+        if not drafts and llm is not None:
             draft = llm.extract_recipe(title, body)
             if draft is not None:
+                drafts = [draft]
                 stats["llm"] += 1
-        if draft is None or not draft.ingredients:
+        if not drafts:
             stats["skipped"] += 1
             continue
-        draft.source["note_path"] = str(row["path"])
-        ingredients = []
-        for ingredient in draft.ingredients:
-            ingredients.append(
-                {
-                    "name": ingredient.name,
-                    "normalized_name": normalize_ingredient_name(ingredient.name),
-                    "quantity": ingredient.quantity,
-                    "unit": ingredient.unit,
-                    "optional": ingredient.optional,
-                    "note": ingredient.note,
-                }
+        for draft in drafts:
+            draft.source["note_path"] = str(row["path"])
+            ingredients = []
+            for ingredient in draft.ingredients:
+                ingredients.append(
+                    {
+                        "name": ingredient.name,
+                        "normalized_name": normalize_ingredient_name(ingredient.name),
+                        "quantity": ingredient.quantity,
+                        "unit": ingredient.unit,
+                        "optional": ingredient.optional,
+                        "note": ingredient.note,
+                    }
+                )
+            db.catalog.replace_recipe(
+                note_id=int(row["id"]),
+                title=draft.title,
+                servings=draft.servings,
+                prep_minutes=draft.prep_minutes,
+                cook_minutes=draft.cook_minutes,
+                confidence=draft.confidence,
+                tags=draft.tags,
+                source=draft.source,
+                ingredients=ingredients,
             )
-        db.catalog.replace_recipe(
-            note_id=int(row["id"]),
-            title=draft.title,
-            servings=draft.servings,
-            prep_minutes=draft.prep_minutes,
-            cook_minutes=draft.cook_minutes,
-            confidence=draft.confidence,
-            tags=draft.tags,
-            source=draft.source,
-            ingredients=ingredients,
-        )
-        stats["recipes"] += 1
+            stats["recipes"] += 1
     return stats
 
 

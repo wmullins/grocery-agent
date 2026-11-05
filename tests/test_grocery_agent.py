@@ -22,8 +22,9 @@ from grocery_agent.obsidian import Vault
 from grocery_agent.proposals import ProposalManager
 from grocery_agent.recipes import (
     Ingredient,
-    extract_recipe_deterministic,
+    extract_recipes_from_note,
     ingredient_requirements,
+    is_recipe_like,
     normalize_ingredient_name,
 )
 from grocery_agent.retail.adapter import (
@@ -111,13 +112,46 @@ def test_db_note_sync_and_search(db, tmp_path):
     assert results[0]["title"] == "Pasta"
 
 
-def test_recipe_extraction_deterministic():
-    draft = extract_recipe_deterministic("Pasta", "## Ingredients\n- 200g pasta\n- 1 tbsp olive oil\n- Salt to taste\n")
-    assert draft is not None
+def test_recipe_extraction_from_section():
+    body = "## Ingredients\n- 200g pasta\n- 1 tbsp olive oil\n- Salt to taste\n"
+    drafts = extract_recipes_from_note("Pasta", body, [])
+    assert len(drafts) == 1
+    draft = drafts[0]
     assert draft.title == "Pasta"
     names = [ingredient.name for ingredient in draft.ingredients]
     assert "pasta" in names
     assert "olive oil" in names
+
+
+def test_extract_recipes_from_list_note():
+    body = (
+        "Ratatouille with sausages\n"
+        "Chimchurri with sausages / steak\n"
+        "Lamb cutlets with rosemary\n"
+        "\n"
+        "Classics:\n"
+        "Tomatoes\n"
+    )
+    drafts = extract_recipes_from_note("Recipes", body, [])
+    assert len(drafts) >= 4
+    titles = [d.title for d in drafts]
+    assert "Ratatouille with sausages" in titles
+    assert "Lamb cutlets with rosemary" in titles
+    assert "Tomatoes" in titles
+    # Section header should be excluded
+    assert "Classics:" not in titles
+
+
+def test_is_recipe_like_list_format():
+    body = "Pasta carbonara\nRoast chicken\nGrilled salmon\n"
+    assert is_recipe_like("Dinner ideas", body, []) is True
+    assert is_recipe_like("Random note", "Just a random paragraph with no list structure.", []) is False
+
+
+def test_parenthetical_ingredient_note():
+    drafts = extract_recipes_from_note("Test", "Salmon tacos (paprika, smashed salmon, kewpie)", [])
+    assert len(drafts) == 1
+    assert drafts[0].ingredients[0].note == "paprika, smashed salmon, kewpie"
 
 
 def test_ingredient_requirements_scale():
