@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Prices · Grocery Agent{% endblock %}
+
+{% block content %}
+    <h1>Prices</h1>
+    <p class="muted">Current prices and promotions across tracked retailers.</p>
+
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/orders">Orders</a>
+        <a href="/recipes">Recipes</a>
+        <a href="/prices" class="active">Prices</a>
+    </div>
+
+    <div class="card">
+        <h3>Price observations</h3>
+        {% if prices %}
+        <table>
+            <thead>
+                <tr><th>Product</th><th>Retailer</th><th>Price</th><th>Unit price</th><th>Stock</th><th>Seen</th></tr>
+            </thead>
+            <tbody>
+                {% for p in prices %}
+                <tr>
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.retailer }}</td>
+                    <td class="price">£{{ p.price_minor / 100 if p.price_minor else 0 }}</td>
+                    <td class="muted">{{ p.unit_price_minor / 100 if p.unit_price_minor else 0 }} / {{ p.unit_measure or '-' }}</td>
+                    <td><span class="badge {% if p.in_stock %}badge-ok{% else %}badge-error{% endif %}">{{ 'ok' if p.in_stock else 'unknown' }}</span></td>
+                    <td class="muted">{{ p.observed_at[:10] if p.observed_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>No price data yet.</p>
+            <p class="muted">Run <code>grocery compare &lt;retailer&gt; &lt;product&gt;</code> to collect prices.</p>
+        </div>
+        {% endif %}
+    </div>
+{% endblock %}

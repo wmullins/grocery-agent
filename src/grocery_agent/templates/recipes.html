@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Recipes · Grocery Agent{% endblock %}
+
+{% block content %}
+    <h1>Recipes</h1>
+    <p class="muted">Recipes extracted from your Obsidian vault notes.</p>
+
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/orders">Orders</a>
+        <a href="/recipes" class="active">Recipes</a>
+        <a href="/prices">Prices</a>
+    </div>
+
+    <div class="card">
+        <h3>Recipe collection</h3>
+        {% if recipes %}
+        <table>
+            <thead>
+                <tr><th>Recipe</th><th>Servings</th><th>Prep</th><th>Cook</th><th>Confidence</th></tr>
+            </thead>
+            <tbody>
+                {% for r in recipes %}
+                <tr>
+                    <td>{{ r.title }}</td>
+                    <td>{{ r.servings or '-' }}</td>
+                    <td>{{ r.prep_minutes or '-' }} min</td>
+                    <td>{{ r.cook_minutes or '-' }} min</td>
+                    <td><span class="badge badge-ok">{{ (r.confidence * 100)|round(0) }}%</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>No recipes yet.</p>
+            <p class="muted">Run <code>grocery recipes-extract</code> to scan your vault for recipe notes.</p>
+        </div>
+        {% endif %}
+    </div>
+{% endblock %}

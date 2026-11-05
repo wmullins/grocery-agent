@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Grocery Agent{% endblock %}
+
+{% block content %}
+    <h1>Grocery Agent</h1>
+    <p class="muted">Your personal shopping dashboard &mdash; orders, prices, and recipes.</p>
+
+    <div class="nav">
+        <a href="/" class="active">Dashboard</a>
+        <a href="/orders">Orders</a>
+        <a href="/recipes">Recipes</a>
+        <a href="/prices">Prices</a>
+    </div>
+
+    <h2>Overview</h2>
+    <div class="grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ orders_count }}</div>
+            <div class="stat-label">Orders imported</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ recipes_count }}</div>
+            <div class="stat-label">Recipes indexed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ price_observations_count }}</div>
+            <div class="stat-label">Price observations</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ retailers_count }}</div>
+            <div class="stat-label">Retailers tracked</div>
+        </div>
+    </div>
+
+    {% if recent_orders %}
+    <div class="card">
+        <h3>Recent orders</h3>
+        <table>
+            <thead>
+                <tr><th>Date</th><th>Retailer</th><th>Total</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% for order in recent_orders %}
+                <tr>
+                    <td>{{ order.ordered_at[:10] }}</td>
+                    <td>{{ order.retailer }}</td>
+                    <td class="price">£{{ order.total_minor / 100 if order.total_minor else 0 }}</td>
+                    <td><span class="badge badge-ok">{{ order.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="muted"><a href="/orders">View all orders &rarr;</a></p>
+    </div>
+    {% endif %}
+
+    {% if big_discounts %}
+    <div class="card">
+        <h3>This week's biggest discounts</h3>
+        <table>
+            <thead>
+                <tr><th>Product</th><th>Retailer</th><th>Was</th><th>Now</th><th>Saving</th></tr>
+            </thead>
+            <tbody>
+                {% for d in big_discounts %}
+                <tr>
+                    <td>{{ d.name }}</td>
+                    <td>{{ d.retailer }}</td>
+                    <td class="muted">£{{ d.before / 100 if d.before else 0 }}</td>
+                    <td class="price">£{{ d.after / 100 if d.after else 0 }}</td>
+                    <td class="ok">£{{ d.saving / 100 if d.saving else 0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="muted"><a href="/prices">View all prices &rarr;</a></p>
+    </div>
+    {% endif %}
+
+    {% if common_recipes %}
+    <div class="card">
+        <h3>Common recipes</h3>
+        <table>
+            <thead>
+                <tr><th>Recipe</th><th>Servings</th><th>Source</th></tr>
+            </thead>
+            <tbody>
+                {% for r in common_recipes %}
+                <tr>
+                    <td>{{ r.title }}</td>
+                    <td>{{ r.servings or '-' }}</td>
+                    <td class="muted">{{ r.source.note_path if r.source else 'vault' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="muted"><a href="/recipes">View all recipes &rarr;</a></p>
+    </div>
+    {% endif %}
+
+    <div class="empty" style="margin-top: 40px;">
+        <p>No data yet? <a href="/orders">Import orders</a>, <a href="/recipes">extract recipes</a> from your Obsidian vault, or run <code>grocery doctor</code> to check retailer access.</p>
+    </div>
+{% endblock %}

@@ -408,5 +408,17 @@ def config_show() -> None:
     console.print_json(json.dumps(data, indent=2))
 
 
+@app.command()
+def serve(
+    port: int = typer.Option(8787, "--port", help="Dashboard port"),
+) -> None:
+    """Start the local dashboard for browsing orders, recipes, and prices."""
+    import uvicorn
+
+    header("Dashboard")
+    ok(f"Local dashboard: http://127.0.0.1:{port}")
+    uvicorn.run("grocery_agent.dashboard:app", host="127.0.0.1", port=port)
+
+
 if __name__ == "__main__":
     app()
