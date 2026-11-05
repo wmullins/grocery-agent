@@ -180,15 +180,15 @@ def recipes_extract() -> None:
     config = _load_config()
     db = _db()
     db.initialize()
-    cleared = db.catalog.clear_recipes()
-    with spinner("Extracting recipes from vault"):
+    with spinner("Clearing old recipes and extracting from vault"):
+        db.catalog.clear_recipes()
         stats = extract_recipes(
             vault_root=config.paths.vault,
             db=db,
             llm=OllamaClient(config.llm),
         )
     header("Recipe Extraction")
-    ok(f"{stats['recipes']} recipes from {stats['notes']} notes (cleared {cleared} old)")
+    ok(f"{stats['recipes']} recipes from {stats['notes']} notes")
 
 
 @app.command()

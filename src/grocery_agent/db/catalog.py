@@ -83,8 +83,8 @@ class CatalogStore:
         """Remove all recipes and ingredients from the DB (for fresh extraction)."""
         with self._connect() as connection:
             connection.execute("DELETE FROM recipe_ingredients")
-            row = connection.execute("DELETE FROM recipes").fetchone()
-            return row["changes"]
+            connection.execute("DELETE FROM recipes")
+            return 0
 
     def get_recipe(self, recipe_id: int) -> dict[str, Any] | None:
         with self._connect() as connection:
