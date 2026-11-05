@@ -410,7 +410,7 @@ def config_show() -> None:
 
 @app.command()
 def serve(
-    port: int = typer.Option(8787, "--port", help="Dashboard port"),
+    port: int = typer.Option(8788, "--port", help="Dashboard port"),
 ) -> None:
     """Start the local dashboard for browsing orders, recipes, and prices."""
     import uvicorn
