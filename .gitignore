@@ -1,0 +1,17 @@
+.venv/
+node_modules/
+data/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+.DS_Store
+.env
+*.sqlite3
+*.db
+.env
+.env.*
+opencode.json
