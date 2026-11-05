@@ -10,25 +10,27 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 
-console = Console(width=110)
+# Force dark-terminal-friendly palette: bright colors that are visible on black
+console = Console(width=110, force_terminal=True, color_system="truecolor")
 
-# Lichtenstein pop-art palette over Ives minimalism
-INK = "#0a0a0a"  # near-black
-PAPER = "#ffffff"  # pure white
-ACCENT = "#ff0033"  # Lichtenstein red
-ACCENT_DARK = "#cc0022"
-BLUE = "#0033ff"  # Lichtenstein blue
-BLUE_DARK = "#0022cc"
+# Dark-background safe palette (Lichtenstein pop-art + Ives minimalism)
+INK = "#ffffff"  # near-white text on dark bg
+INK_MUTED = "#aaaaaa"  # muted grey
+ACCENT = "#ff0066"  # Lichtenstein red - bright
+ACCENT_DARK = "#cc0044"
+BLUE = "#00ccff"  # Lichtenstein cyan-blue - bright
+BLUE_DARK = "#0088cc"
 YELLOW = "#ffcc00"  # Lichtenstein yellow
 YELLOW_DARK = "#ccaa00"
-MUTED = "#666666"
-LINE = "#e5e5e5"
+GREEN = "#00ff88"  # bright green
+GREEN_DARK = "#00aa66"
+LINE = "#333333"  # dark grey lines for dark bg
 
 
 def header(title: str, subtitle: str | None = None) -> None:
     text = Text(title, style=f"bold {INK}")
     if subtitle:
-        text.append(f"  ·  {subtitle}", style=MUTED)
+        text.append(f"  ·  {subtitle}", style=INK_MUTED)
     panel = Panel(
         Align.left(text, pad=(0, 2)),
         box=HEAVY,
@@ -41,7 +43,7 @@ def header(title: str, subtitle: str | None = None) -> None:
 
 
 def section(title: str) -> None:
-    console.print(Text(f"{title.upper()}", style=f"bold {MUTED}"))
+    console.print(Text(f"{title.upper()}", style=f"bold {INK_MUTED}"))
 
 
 def money(minor: int | None) -> str:
@@ -66,10 +68,10 @@ def price_table(
     )
     table.add_column("Product", style=f"bold {INK}")
     table.add_column("Price", justify="right", style=ACCENT)
-    table.add_column("Unit", justify="right", style=MUTED)
+    table.add_column("Unit", justify="right", style=INK_MUTED)
     table.add_column("Stock", justify="center", style=INK)
     for name, price, unit, stock in rows:
-        stock_style = "#0033ff" if stock == "ok" else ACCENT
+        stock_style = BLUE if stock == "ok" else ACCENT
         table.add_row(name, price, unit, Text(stock, style=stock_style))
     if show_total and total_minor is not None:
         table.add_row(
@@ -89,10 +91,10 @@ def proposal_table(title: str, lines: list[dict], budget_minor: int | None = Non
         border_style=LINE,
         header_style=f"bold {INK}",
     )
-    table.add_column("#", justify="right", style=MUTED)
+    table.add_column("#", justify="right", style=INK_MUTED)
     table.add_column("Product", style=f"bold {INK}")
     table.add_column("Qty", justify="right", style=INK)
-    table.add_column("Unit", justify="right", style=MUTED)
+    table.add_column("Unit", justify="right", style=INK_MUTED)
     table.add_column("Line", justify="right", style=INK)
     for line in lines:
         table.add_row(
@@ -106,7 +108,7 @@ def proposal_table(title: str, lines: list[dict], budget_minor: int | None = Non
     if budget_minor is not None:
         total = sum(line.get("line_total_minor") or 0 for line in lines)
         remaining = budget_minor - total
-        style = ACCENT if remaining >= 0 else BLUE
+        style = GREEN if remaining >= 0 else BLUE
         console.print(
             Panel(
                 Align.left(
@@ -126,11 +128,11 @@ def proposal_table(title: str, lines: list[dict], budget_minor: int | None = Non
 
 def status_panel(items: list[tuple[str, str, str]]) -> None:
     table = Table(box=SIMPLE_HEAVY, border_style=LINE, show_header=False)
-    table.add_column("Item", style=MUTED)
+    table.add_column("Item", style=INK_MUTED)
     table.add_column("Status", justify="center")
     table.add_column("Detail", style=INK)
     for name, status, detail in items:
-        style = "#0033ff" if status == "ok" else ACCENT
+        style = BLUE if status == "ok" else ACCENT
         table.add_row(name, Text(status.upper(), style=style), detail)
     console.print(
         Panel(
@@ -146,7 +148,7 @@ def status_panel(items: list[tuple[str, str, str]]) -> None:
 
 
 def ok(message: str) -> None:
-    console.print(Text(f"✓ {message}", style="#0033ff"))
+    console.print(Text(f"✓ {message}", style=GREEN))
 
 
 def warn(message: str) -> None:
